@@ -1,60 +1,59 @@
-# Ignition + MariaDB у Podman (Fedora, learning)
+# Ignition + MariaDB with Podman (Fedora, learning)
 
 ---
 
-## 🟢 ЩОДЕННЕ ВИКОРИСТАННЯ (коротка шпаргалка)
+## 🟢 DAILY USE (quick reference)
 
-Це все, що треба пам'ятати, коли все вже встановлено (розділи нижче — "ВСТАНОВЛЕННЯ").
+This is all you need to remember once everything is installed (the sections below cover installation).
 
-**Підняти Gateway + MariaDB:**
+**Start the Gateway + MariaDB:**
 ```bash
 podman pod start ignition-stack
 ```
-Перевірити: http://localhost:8088 (логін `admin` / `ignition`)
+Check: http://localhost:8088 (login: `admin` / `ignition`)
 
-**Зупинити Gateway + MariaDB** (дані нікуди не діваються):
+**Stop the Gateway + MariaDB** (your data is preserved):
 ```bash
 podman pod stop ignition-stack
 ```
 
-**Перевірити, що зараз запущено:**
+**Check what is currently running:**
 ```bash
 podman pod ps
 podman ps --pod
 ```
 
-**Відкрити Designer:**
+**Open Designer:**
 ```bash
 toolbox enter ignition-designer
 ```
 ```bash
 cd ~/ignition-designer/designerlauncher
-./designerlauncher.sh
-exit
+env -u WAYLAND_DISPLAY GDK_BACKEND=x11 ./designerlauncher.sh
 ```
-(запускаємо у передньому плані, одразу після — `exit`; саме ця послідовність стабільно відкриває вікно на потрібному моніторі)
+Run the launcher in the foreground. After closing Designer, run `exit` to leave the toolbox. Unsetting `WAYLAND_DISPLAY` and selecting the X11 backend avoids the screen-sharing dialog that appeared instead of the expected context menu in this setup.
 
-**Зайти в MariaDB консоллю (для налагодження):**
+**Open a MariaDB console (for troubleshooting):**
 ```bash
 podman exec -it mariadb mariadb -u ignition -pignition ignition_learning
 ```
 
 ---
 
-## ⚙️ ВСТАНОВЛЕННЯ (один раз)
+## ⚙️ INSTALLATION (one-time setup)
 
-### 1. Volume-и для Gateway і MariaDB
+### 1. Create volumes for the Gateway and MariaDB
 
-Щоб дані (проєкти, теги, таблиці) переживали видалення/пересворення контейнера.
+Volumes preserve data (projects, tags, and tables) if you remove and recreate a container.
 
 ```bash
 podman volume create ignition-data
 podman volume create mariadb-data
 ```
 
-### 2. Pod (щоб керувати Gateway і MariaDB як єдиним цілим)
+### 2. Create a pod (to manage the Gateway and MariaDB together)
 
-Всі порти публікуються на рівні pod-а — контейнери всередині бачать одна одну як `localhost`.
+Ports are published on the pod. Containers in the pod share a network namespace and can reach each other through `localhost`.
 
 ```bash
 podman pod create --name ignition-stack \
@@ -63,7 +62,7 @@ podman pod create --name ignition-stack \
   -p 3306:3306
 ```
 
-### 3. MariaDB
+### 3. Start MariaDB
 
 ```bash
 podman run -d --name mariadb \
@@ -76,7 +75,7 @@ podman run -d --name mariadb \
   docker.io/library/mariadb:11
 ```
 
-### 4. Ignition Gateway (8.3)
+### 4. Start the Ignition Gateway (8.3)
 
 ```bash
 podman run -d --name ignition-gw \
@@ -87,60 +86,57 @@ podman run -d --name ignition-gw \
   docker.io/inductiveautomation/ignition:8.3
 ```
 
-### 5. Перевірка встановлення
+### 5. Verify the installation
 
-- Gateway: http://localhost:8088 (логін: `admin` / `ignition`)
-- У Gateway → Config → Databases → Connections → драйвер **MariaDB**, Connect URL:
+- Gateway: http://localhost:8088 (login: `admin` / `ignition`)
+- In the Gateway, go to **Config → Databases → Connections**, select the **MariaDB** driver, and use this Connect URL:
   ```
   jdbc:mariadb://localhost:3306/ignition_learning
   ```
-  (`localhost`, бо контейнери в одному pod-і й ділять мережевий namespace)
+  (`localhost` works because the containers are in the same pod and share a network namespace.)
 
-### 6. Designer через Toolbox (нативне вікно на робочому столі)
+### 6. Run Designer through Toolbox (native desktop window)
 
-Toolbox — вбудований у Fedora інструмент, ізолює встановлені пакети від хоста, але прокидає Wayland/X11 напряму, тож застосунок відкривається як звичайне вікно на робочому столі.
+Toolbox is included with Fedora. It isolates installed packages from the host while allowing graphical applications to use the desktop's Wayland/X11 display.
 
-**Крок 1** — завантаж лаунчер:
-На Gateway (http://localhost:8088) → **Downloads → Designer Launcher → Linux** → завантаж `designerlauncher.tar.gz`.
+**Step 1 — Download the launcher:**
+In the Gateway (http://localhost:8088), go to **Downloads → Designer Launcher → Linux** and download `designerlauncher.tar.gz`.
 
-**Крок 2** — створи контейнер:
+**Step 2 — Create the toolbox:**
 ```bash
 toolbox create --image registry.fedoraproject.org/fedora-toolbox:41 ignition-designer
 toolbox enter ignition-designer
 ```
 
-**Крок 3** — всередині toolbox постав GUI-залежності і розпакуй архів (домашня тека спільна з хостом, тож файл вже доступний за шляхом, куди його зберіг браузер):
+**Step 3 — Install GUI dependencies and extract the archive inside the toolbox.** The home directory is shared with the host, so the downloaded archive is available inside the toolbox:
 ```bash
-# без цього Designer Launcher падає з "Internal Error"
+# Required to avoid an "Internal Error" when starting Designer Launcher
 sudo dnf install -y gtk3 mesa-libGL libXtst libXrender alsa-lib
 
 mkdir -p ~/ignition-designer && cd ~/ignition-designer
-tar xzf ~/path/designerlauncher.tar.gz   # заміни на реальний шлях
+tar xzf ~/path/designerlauncher.tar.gz   # Replace this with the archive's actual path
 cd designerlauncher
 ```
 
-**Крок 4** — перший запуск і закріплення налаштування:
+**Step 4 — Launch Designer:**
 ```bash
-GDK_BACKEND=x11 ./designerlauncher.sh
+env -u WAYLAND_DISPLAY GDK_BACKEND=x11 ./designerlauncher.sh
 ```
-`GDK_BACKEND=x11` обов'язковий — Fedora Workstation за замовчуванням Wayland, а Glass/JavaFX-бекенд лаунчера з ним падає. Щоб не вводити щоразу:
-```bash
-echo 'export GDK_BACKEND=x11' >> ~/.bashrc
-```
+The `env` command removes `WAYLAND_DISPLAY` for this launch and sets `GDK_BACKEND=x11`. This is the launch configuration confirmed to work in this setup. Run the launcher from `~/ignition-designer/designerlauncher` inside the `ignition-designer` toolbox.
 
-У вікні Designer Launcher додай Gateway адресою `localhost:8088` (toolbox ділить мережевий namespace з хостом), логін `admin` / `ignition`.
+In Designer Launcher, add the Gateway at `localhost:8088` (the toolbox shares the host's network namespace), then sign in with `admin` / `ignition`.
 
 ---
 
-## 🗑️ ПОВНЕ ВИДАЛЕННЯ
+## 🗑️ COMPLETE REMOVAL
 
 ```bash
-# Gateway + MariaDB (контейнери; volume-и, тобто дані, лишаються)
+# Remove the Gateway and MariaDB containers; the volumes (data) are retained
 podman pod rm ignition-stack --force
 
-# дані Gateway + MariaDB (повний скид)
+# Remove Gateway and MariaDB data (full reset)
 podman volume rm ignition-data mariadb-data
 
-# Designer
+# Remove the Designer toolbox
 toolbox rm ignition-designer
 ```
