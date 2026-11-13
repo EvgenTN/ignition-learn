@@ -45,36 +45,7 @@ ln -sf ~/projects/kanoa-docker-template/ignition.sh ~/.local/bin/ignition
 
 Use a **symlink**, not a copy: the script resolves the link and still finds the compose project. If `ignition` is "command not found", `~/.local/bin` is not in your `PATH`: open a new terminal, or run `source ~/.bashrc`.
 
-### 3. Point the script at the right Designer Launcher folder
-
-The launcher archive may unpack into nested folders, leaving two `designerlauncher.sh` files:
-
-```bash
-find ~/ignition-designer -name designerlauncher.sh
-# /home/<you>/ignition-designer/designerlauncher/designerlauncher.sh
-# /home/<you>/ignition-designer/designerlauncher/designerlauncher/designerlauncher.sh
-```
-
-On the tested machine only the **inner** one opened Designer, so set it explicitly (adjust the path to yours):
-
-```bash
-echo 'export IGNITION_LAUNCHER_DIR="$HOME/ignition-designer/designerlauncher/designerlauncher"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-This variable affects only this script, so it is safe to keep in `~/.bashrc` (unlike the Java/Mesa variables, which must **not** go there: the home directory is shared with the host and they would affect every application).
-
-### 4. (Optional) Keep the script out of the project's git
-
-If the compose project is a clone/template of someone else's repository and you don't want `ignition.sh` to show up in `git status`:
-
-```bash
-echo "ignition.sh" >> ~/projects/kanoa-docker-template/.git/info/exclude
-```
-
-This is local to your machine and does not change the shared `.gitignore`.
-
-### 5. Check that it works
+### 3. Check that it works
 
 ```bash
 ignition          # containers start, "Gateway is running" appears
@@ -114,7 +85,7 @@ All optional.
 | `IGNITION_WAIT` | `240` | Seconds to wait for the Gateway |
 | `IGNITION_TOOLBOX` | `ignition-designer` | Toolbox container name |
 | `IGNITION_LAUNCHER_ROOT` | `~/ignition-designer` | Where to search for `designerlauncher.sh` |
-| `IGNITION_LAUNCHER_DIR` | _(auto-detect)_ | Exact folder containing `designerlauncher.sh` (skips auto-detection) |
+| `IGNITION_LAUNCHER_DIR` | _(auto-detect)_ | Optional override: exact folder containing `designerlauncher.sh`. Not needed normally |
 
 Example: `IGNITION_URL=http://kanoa-dev.localtest.me ignition`
 
@@ -131,7 +102,7 @@ env -u WAYLAND_DISPLAY mesa_glthread=false _JAVA_AWT_WM_NONREPARENTING=1 \
   ./designerlauncher.sh
 ```
 
-(see the main setup guide for what each setting does). The script starts it with `toolbox run ... 2>&1 | cat`. The `| cat` is intentional: on the tested machine the launcher window did **not** open when the output went straight to the terminal, and opened normally when the output was piped. The cause was not investigated, so don't remove it.
+(see the main setup guide for what each setting does). The script starts it with `toolbox run ... 2>&1 | cat`. The `| cat` is intentional: on the tested machine the launcher window did **not** open when the output went straight to the terminal, and opened normally when the output was piped. This (not the choice of launcher folder) was the cause of the "nothing happens" problem; why it matters was not investigated, so don't remove it. With it in place, the launcher folder is found automatically on the tested machine, with no override.
 
 ---
 
@@ -144,7 +115,7 @@ env -u WAYLAND_DISPLAY mesa_glthread=false _JAVA_AWT_WM_NONREPARENTING=1 \
 | `You are inside a toolbox` | Run `exit` and use the script on the host |
 | `No compose file found` | Script is not in the compose folder: set `IGNITION_COMPOSE_DIR=/path/to/project` |
 | `Gateway did not answer at ... in 240s` | Wrong address (e.g. you use a Traefik hostname instead of `localhost:8088`): set `IGNITION_URL`. The containers are still running; this is only a warning |
-| `ignition -d` prints `Opening Designer Launcher from ...` and nothing happens | Wrong launcher folder (outer instead of inner): check the path in that line and set `IGNITION_LAUNCHER_DIR` (setup step 3) |
+| `ignition -d` prints `Opening Designer Launcher from ...` and nothing happens | Check the folder shown in that line. If it is not the one that works for you, point the script at the right one with `IGNITION_LAUNCHER_DIR` (see Settings). Also make sure the `2>&1 \| cat` part was not removed from the script (see "What `ignition -d` actually runs") |
 | `Designer Launcher exited with code N` | The launcher failed: run the command from "What `ignition -d` actually runs" by hand inside the toolbox to see the error; also see the Troubleshooting section of the main setup guide |
 | `Toolbox 'ignition-designer' does not exist` | Create it first (main setup guide, section 6) or set `IGNITION_TOOLBOX` |
 
@@ -155,5 +126,4 @@ env -u WAYLAND_DISPLAY mesa_glthread=false _JAVA_AWT_WM_NONREPARENTING=1 \
 ```bash
 rm ~/.local/bin/ignition
 rm ~/projects/kanoa-docker-template/ignition.sh
-# and remove the IGNITION_LAUNCHER_DIR line from ~/.bashrc
 ```
